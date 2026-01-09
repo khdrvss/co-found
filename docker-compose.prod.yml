@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  nginx-proxy:
+    ports:
+      - "80:80"
+      - "443:443"
+  acme-companion:
+    profiles: ["prod"]
