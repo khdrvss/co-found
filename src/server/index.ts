@@ -2,9 +2,23 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import routes from './routes.ts';
 import { errorHandler } from './errors';
+import logger from './logger';
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = parseInt(process.env.PORT || '4000', 10);
+const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '0.0.0.0';
+
+// CORS middleware - Allow all origins for development
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // Middleware
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -12,7 +26,12 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`\n📨 ${req.method.toUpperCase()} ${req.path}`);
+  logger.info(`${req.method} ${req.path}`, { 
+    method: req.method, 
+    path: req.path, 
+    userAgent: req.get('User-Agent'),
+    ip: req.ip 
+  });
   next();
 });
 
@@ -37,7 +56,8 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // Server startup
-app.listen(PORT, () => {
-  console.log(`\n✅ Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health\n`);
+app.listen(PORT, HOST, () => {
+  logger.info(`Server running on http://${HOST}:${PORT}`, { port: PORT, host: HOST });
+  logger.info(`Health check: http://localhost:${PORT}/api/health`);
+  logger.info(`Network access: http://192.168.3.107:${PORT}/api/health`);
 });

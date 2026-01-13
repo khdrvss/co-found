@@ -25,7 +25,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { signIn, signUp, googleLogin } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
 
@@ -61,17 +61,24 @@ export default function AuthPage() {
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
       setLoading(true);
-      const { error } = await googleLogin(credentialResponse.credential, credentialResponse.clientId);
+      console.log("🎉 Google Sign-In Success:", credentialResponse);
+      
+      if (!credentialResponse.credential) {
+        throw new Error("No credential received from Google");
+      }
+
+      const { error } = await signInWithGoogle(credentialResponse.credential);
       if (error) throw error;
 
       toast({
-        title: texts.success,
+        title: "Successfully signed in with Google!",
       });
       navigate("/");
     } catch (error: any) {
+      console.error("❌ Google Sign-In Error:", error);
       toast({
         title: texts.error,
-        description: error.message,
+        description: error.message || "Google sign-in failed",
         variant: "destructive",
       });
     } finally {
@@ -224,16 +231,13 @@ export default function AuthPage() {
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => {
-                console.log('Login Failed');
+                console.error('❌ Google Login Failed');
                 toast({
                   title: texts.error,
                   description: "Google Login Failed",
                   variant: "destructive",
                 });
               }}
-              useOneTap
-              theme="filled_black"
-              shape="pill"
             />
           </div>
 

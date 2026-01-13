@@ -6,7 +6,6 @@ import { viloyatlar } from "@/data/viloyatlar";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { PrivateChatDialog } from "@/components/dialogs/PrivateChatDialog";
 import { toast } from "@/hooks/use-toast";
 
 import { Project } from "@/components/cards/ProjectCard";
@@ -16,13 +15,13 @@ interface PersonDetailDialogProps {
   projects?: Project[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenPrivateChat?: (payload: { partnerId: string; partnerName: string; partnerAvatar?: string }) => void;
 }
 
-export function PersonDetailDialog({ person, projects, open, onOpenChange }: PersonDetailDialogProps) {
+export function PersonDetailDialog({ person, projects, open, onOpenChange, onOpenPrivateChat }: PersonDetailDialogProps) {
   const { t } = useLanguage();
 
 
-  const [chatOpen, setChatOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
   const handleShare = async () => {
@@ -48,6 +47,14 @@ export function PersonDetailDialog({ person, projects, open, onOpenChange }: Per
       title: isSaved ? "O'chirildi" : "Saqlandi",
       description: isSaved ? "Profil saqlanganlardan o'chirildi" : "Profil saqlanganlarga qo'shildi",
     });
+  };
+
+  const handleOpenPrivateChat = () => {
+    if (!person) return;
+    // Close this dialog first
+    onOpenChange(false);
+    // Ask parent to open private chat (app-level) with partner details
+    onOpenPrivateChat?.({ partnerId: person.user_id || person.id, partnerName: person.full_name || person.name || person.email || 'Partner', partnerAvatar: person.avatar || person.avatar_url });
   };
 
   if (!person) return null;
@@ -237,7 +244,7 @@ export function PersonDetailDialog({ person, projects, open, onOpenChange }: Per
             {/* CTAs */}
             <div className="flex gap-3">
               <Button
-                onClick={() => setChatOpen(true)}
+                onClick={handleOpenPrivateChat}
                 className="flex-1 h-12 text-base gap-2 shadow-glow hover:shadow-glow-lg transition-shadow"
               >
                 <MessageCircle className="w-4 h-4" />
@@ -251,14 +258,6 @@ export function PersonDetailDialog({ person, projects, open, onOpenChange }: Per
           </div>
         </DialogContent>
       </Dialog>
-
-      <PrivateChatDialog
-        partnerId={person.user_id || person.id}
-        partnerName={personName}
-        partnerAvatar={personAvatar}
-        open={chatOpen}
-        onOpenChange={setChatOpen}
-      />
     </>
   );
 }

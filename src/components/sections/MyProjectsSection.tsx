@@ -52,11 +52,14 @@ export function MyProjectsSection({
     const [requestsOpen, setRequestsOpen] = useState(false);
     const [membersOpen, setMembersOpen] = useState(false);
 
-    const { data: allProjects = [], isLoading } = useQuery({
+    const { data: projectsResponse, isLoading } = useQuery({
         queryKey: ['projects'],
         queryFn: () => api.get('/projects'),
     });
 
+    // Extract data from paginated response
+    const allProjects = projectsResponse?.data || [];
+    
     // Filter projects created by the current user
     const myProjects = allProjects.filter((p: any) => p.user_id === user?.id);
 

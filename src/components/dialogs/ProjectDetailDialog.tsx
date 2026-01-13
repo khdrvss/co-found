@@ -8,10 +8,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, getAvatarUrl } from "@/lib/utils";
 
 
 import { PersonDetailDialog } from "./PersonDetailDialog";
+import { EditProjectDialog } from "./EditProjectDialog";
 import { Person } from "@/data/mockPeople";
 
 interface ProjectDetailDialogProps {
@@ -19,6 +20,7 @@ interface ProjectDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenChat?: () => void;
+  onEdit?: () => void; // Added onEdit prop
 }
 
 const categoryColors: Record<string, string> = {
@@ -37,18 +39,29 @@ const stageColors: Record<string, string> = {
   "Kengaymoqda": "bg-chart-2/10 text-chart-2 border-chart-2/20",
 };
 
-export function ProjectDetailDialog({ project, open, onOpenChange, onOpenChat }: ProjectDetailDialogProps) {
+export function ProjectDetailDialog({ project, open, onOpenChange, onOpenChat, onEdit }: ProjectDetailDialogProps) {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [ownerProfile, setOwnerProfile] = useState<Person | null>(null);
   const [ownerProjects, setOwnerProjects] = useState<Project[]>([]);
 
   if (!project) return null;
 
   const isOwner = user && user.id === project.user_id;
+  
+  // Debug logging
+  console.log("🔍 Ownership check:", {
+    userId: user?.id,
+    projectUserId: project.user_id,
+    userEmail: user?.email,
+    isOwner,
+    projectTitle: project.name
+  });
+  
   const viloyatName = viloyatlar.find(v => v.id === project.viloyat)?.name || project.viloyat;
 
   const handleDelete = async () => {
@@ -197,8 +210,11 @@ export function ProjectDetailDialog({ project, open, onOpenChange, onOpenChat }:
                   // In a larger app, we'd use a specific endpoint /api/users/:id/profile
 
                   // Show simple loading feedback if needed, or just open dialog when ready
-                  const users: any[] = await api.get('/people');
-                  const allProjects: Project[] = await api.get('/projects');
+                  const usersResponse: any = await api.get('/people');
+                  const projectsResponse: any = await api.get('/projects');
+                  
+                  const users = usersResponse.data || usersResponse;
+                  const allProjects = projectsResponse.data || projectsResponse;
 
                   const ownerProfile = users.find((u: any) => u.user_id === project.user?.id || u.id === project.user?.id);
                   const ownerProjects = allProjects.filter((p: any) => p.user_id === project.user?.id);
@@ -216,7 +232,7 @@ export function ProjectDetailDialog({ project, open, onOpenChange, onOpenChat }:
               }}
             >
               <img
-                src={project.user.profile?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${project.user.email}`}
+                src={project.user.profile?.avatar_url || getAvatarUrl(project.user.email)}
                 alt={project.user.profile?.full_name || 'Owner'}
                 className="w-10 h-10 rounded-full ring-2 ring-border group-hover:ring-primary transition-all"
               />
@@ -235,6 +251,16 @@ export function ProjectDetailDialog({ project, open, onOpenChange, onOpenChat }:
             projects={ownerProjects}
             open={!!ownerProfile}
             onOpenChange={(open) => !open && setOwnerProfile(null)}
+          />
+
+          <EditProjectDialog 
+            project={project} 
+            open={isEditing} 
+            onOpenChange={setIsEditing}
+            onSuccess={() => {
+              setIsEditing(false);
+              window.location.reload();
+            }}
           />
 
           {/* Tags */}
@@ -306,7 +332,11 @@ export function ProjectDetailDialog({ project, open, onOpenChange, onOpenChat }:
 
             {isOwner && (
               <div className="flex gap-2 w-full mt-2 sm:mt-0 sm:w-auto">
-                <Button variant="outline" className="flex-1 gap-2 border-primary/30 text-primary hover:bg-primary/10" disabled>
+                <Button 
+                  variant="outline" 
+                  className="flex-1 gap-2 border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={() => setIsEditing(true)}
+                >
                   <Edit2 className="w-4 h-4" />
                   Tahrirlash
                 </Button>

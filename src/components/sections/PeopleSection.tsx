@@ -10,7 +10,9 @@ export function PeopleSection() {
       try {
         const res = await fetch("/api/people");
         if (!res.ok) return; // fallback to mocks
-        const data = await res.json();
+        const response = await res.json();
+        // Extract data array from paginated response
+        const data = response.data || response;
         // Map DB rows to Person shape
         const mapped: Person[] = data.map((p: any) => ({
           id: p.id,

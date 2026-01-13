@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 interface AddProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (project?: any, openChat?: boolean) => void;
 }
 
 const categories = ["Startup", "SaaS", "AI", "Web3", "Fintech", "EdTech"];
@@ -189,7 +189,7 @@ export function AddProjectDialog({ open, onOpenChange, onSuccess }: AddProjectDi
       
       resetForm();
       onOpenChange(false);
-      onSuccess?.();
+      onSuccess?.(project, true);
     } catch (error: any) {
       toast({
         title: texts.error,

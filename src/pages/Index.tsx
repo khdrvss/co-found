@@ -27,6 +27,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { cn, getAvatarUrl } from "@/lib/utils";
+import { PrivateChatDialog } from "@/components/dialogs/PrivateChatDialog";
 
 const ITEMS_PER_PAGE = 8;
 
@@ -59,19 +61,24 @@ const Index = () => {
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogMode, setAuthDialogMode] = useState<"login" | "signup">("login");
+  const [privateChatPartner, setPrivateChatPartner] = useState<{ partnerId: string; partnerName: string; partnerAvatar?: string } | null>(null);
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const { data: projects = [], isLoading: loadingProjects, refetch: refetchProjects } = useQuery({
+  const { data: projectsResponse, isLoading: loadingProjects, refetch: refetchProjects } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.get('/projects'),
   });
 
-  const { data: people = [], isLoading: loadingPeople } = useQuery({
+  const { data: peopleResponse, isLoading: loadingPeople } = useQuery({
     queryKey: ['people'],
     queryFn: () => api.get('/people'),
   });
+
+  // Extract data arrays from the paginated response
+  const projects = projectsResponse?.data || [];
+  const people = peopleResponse?.data || [];
 
   const handleSidebarChange = (tab: SidebarTab) => {
     if (tab === "admin") {
@@ -382,7 +389,7 @@ const Index = () => {
                   className="flex items-center gap-2 px-3 py-2 rounded-lg glass-hover transition-all shrink-0"
                 >
                   <img
-                    src={user.profile?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.email}`}
+                    src={user.profile?.avatar_url || getAvatarUrl(user.profile?.full_name || user.email)}
                     alt={user.profile?.full_name || user.email}
                     className="w-8 h-8 rounded-lg"
                   />
@@ -467,6 +474,7 @@ const Index = () => {
         person={selectedPerson}
         open={!!selectedPerson}
         onOpenChange={(open) => !open && setSelectedPerson(null)}
+        onOpenPrivateChat={(payload) => setPrivateChatPartner(payload)}
       />
       <AddProjectDialog
         open={addProjectOpen}
@@ -493,6 +501,17 @@ const Index = () => {
         onOpenChange={setAuthDialogOpen}
         defaultMode={authDialogMode}
       />
+
+      {privateChatPartner && (
+        <PrivateChatDialog
+          open={!!privateChatPartner}
+          onOpenChange={(open) => !open && setPrivateChatPartner(null)}
+          partnerId={privateChatPartner.partnerId}
+          partnerName={privateChatPartner.partnerName}
+          partnerAvatar={privateChatPartner.partnerAvatar}
+          overlayDisabled={true}
+        />
+      )}
     </div>
   );
 };

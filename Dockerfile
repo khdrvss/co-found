@@ -33,10 +33,9 @@ COPY --from=builder /app/dist ./dist
 COPY src ./src
 COPY migrations ./migrations
 COPY schema.sql ./
-COPY init-db.ts ./
-COPY seed.ts ./
 COPY tsconfig*.json ./
 COPY prisma ./prisma
+COPY docs ./docs
 
 # Create uploads directory
 RUN mkdir -p uploads && chown -R node:node /app

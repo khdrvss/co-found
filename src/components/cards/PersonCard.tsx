@@ -1,5 +1,5 @@
 import { Bookmark, MessageCircle, Sparkles, MapPin, Briefcase } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getAvatarUrl } from "@/lib/utils";
 import { Person } from "@/data/mockPeople";
 import { viloyatlar } from "@/data/viloyatlar";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -17,7 +17,7 @@ export function PersonCard({ person, index = 0, onClick }: PersonCardProps) {
 
   // Safe property access with fallbacks
   const personName = person.name || person.full_name || 'Anonymous';
-  const personAvatar = person.avatar || person.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${personName}`;
+  const personAvatar = person.avatar || person.avatar_url || getAvatarUrl(personName);
   const personRole = person.role || (Array.isArray(person.roles) ? person.roles[0] : person.roles) || 'Foydalanuvchi';
   const personBio = person.bio || '';
   const personSkills = person.skills || [];

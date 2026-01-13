@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: white;
+            color: black;
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Co-found.uz Test Page</h1>
+    <p>If you can see this, the web server is working!</p>
+    
+    <h2>API Tests:</h2>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        // Test backend API
+        fetch('/api/health')
+            .then(r => r.json())
+            .then(data => {
+                results.innerHTML += '<p class="success">✅ Backend health check: ' + JSON.stringify(data) + '</p>';
+                
+                // Test projects endpoint
+                return fetch('/api/projects');
+            })
+            .then(r => r.json())
+            .then(data => {
+                const count = data.data ? data.data.length : 0;
+                const total = data.pagination ? data.pagination.total : 0;
+                results.innerHTML += '<p class="success">✅ Projects API: Found ' + count + ' projects (Total: ' + total + ')</p>';
+                
+                // Test people endpoint
+                return fetch('/api/people');
+            })
+            .then(r => r.json())
+            .then(data => {
+                const count = data.data ? data.data.length : 0;
+                const total = data.pagination ? data.pagination.total : 0;
+                results.innerHTML += '<p class="success">✅ People API: Found ' + count + ' people (Total: ' + total + ')</p>';
+            })
+            .catch(err => {
+                results.innerHTML += '<p class="error">❌ Error: ' + err.message + '</p>';
+            });
+    </script>
+</body>
+</html>

@@ -29,7 +29,7 @@ export const mockPeople: Person[] = [
     skills: ["React", "Node.js", "TypeScript", "PostgreSQL"],
     lookingFor: "Hammuassis imkoniyati",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=aziz",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=aziz&backgroundColor=b6e3f4,c0aede,d1d4f9",
     viloyat: "toshkent-sh",
   },
   {
@@ -40,7 +40,7 @@ export const mockPeople: Person[] = [
     skills: ["Figma", "UI/UX", "Prototiplash", "Tadqiqot"],
     lookingFor: "Dizayn lideri roli",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=dilnoza",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=dilnoza&backgroundColor=ffdfbf,c0aede",
     viloyat: "toshkent-sh",
   },
   {
@@ -51,7 +51,7 @@ export const mockPeople: Person[] = [
     skills: ["Python", "TensorFlow", "PyTorch", "MLOps"],
     lookingFor: "AI startap",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sardor",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sardor&backgroundColor=c0aede,d1d4f9",
     viloyat: "samarqand",
   },
   {
@@ -62,7 +62,7 @@ export const mockPeople: Person[] = [
     skills: ["SEO", "Kontent Marketing", "Analitika", "Growth Hacking"],
     lookingFor: "Marketing hammuassisi",
     available: false,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=nodira",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=nodira&backgroundColor=b6e3f4,ffdfbf",
     viloyat: "buxoro",
   },
   {
@@ -73,7 +73,7 @@ export const mockPeople: Person[] = [
     skills: ["Go", "Kubernetes", "AWS", "Mikroservislar"],
     lookingFor: "Texnik rol",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jamshid",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jamshid&backgroundColor=c0aede,d1d4f9",
     viloyat: "toshkent-v",
   },
   {
@@ -84,7 +84,7 @@ export const mockPeople: Person[] = [
     skills: ["React Native", "Flutter", "iOS", "Android"],
     lookingFor: "Mobil lider",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=malika",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=malika&backgroundColor=ffdfbf,b6e3f4",
     viloyat: "fargona",
   },
   {
@@ -95,7 +95,7 @@ export const mockPeople: Person[] = [
     skills: ["Biznes Strategiya", "Moliyalashtirish", "Mahsulot", "Liderlik"],
     lookingFor: "Texnik hammuassis",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=bekzod",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=bekzod&backgroundColor=c0aede,d1d4f9",
     viloyat: "namangan",
   },
   {
@@ -106,7 +106,7 @@ export const mockPeople: Person[] = [
     skills: ["Docker", "Terraform", "CI/CD", "Linux"],
     lookingFor: "DevOps roli",
     available: false,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=gulnora",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=gulnora&backgroundColor=b6e3f4,ffdfbf",
     viloyat: "andijon",
   },
   {
@@ -117,7 +117,7 @@ export const mockPeople: Person[] = [
     skills: ["Solidity", "Rust", "Web3.js", "Smart Kontraktlar"],
     lookingFor: "Web3 startap",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=otabek",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=otabek&backgroundColor=c0aede,d1d4f9",
     viloyat: "xorazm",
   },
   {
@@ -128,7 +128,7 @@ export const mockPeople: Person[] = [
     skills: ["Python", "SQL", "Tableau", "Mashinali O'rganish"],
     lookingFor: "Data lider roli",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sevara",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sevara&backgroundColor=ffdfbf,b6e3f4",
     viloyat: "jizzax",
   },
   {
@@ -139,7 +139,7 @@ export const mockPeople: Person[] = [
     skills: ["React", "Next.js", "Tailwind", "TypeScript"],
     lookingFor: "Frontend lider",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=rustam",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=rustam&backgroundColor=c0aede,d1d4f9",
     viloyat: "navoiy",
   },
   {
@@ -150,7 +150,7 @@ export const mockPeople: Person[] = [
     skills: ["Agile", "Yo'l Xaritasi", "Foydalanuvchi Hikoyalari", "Analitika"],
     lookingFor: "Mahsulot Boshlig'i",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=zarina",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=zarina&backgroundColor=ffdfbf,b6e3f4",
     viloyat: "qashqadaryo",
   },
   {
@@ -161,7 +161,7 @@ export const mockPeople: Person[] = [
     skills: ["Node.js", "Python", "MongoDB", "Redis"],
     lookingFor: "Texnik rol",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=shoxrux",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=shoxrux&backgroundColor=c0aede,d1d4f9",
     viloyat: "sirdaryo",
   },
   {
@@ -172,7 +172,7 @@ export const mockPeople: Person[] = [
     skills: ["Foydalanuvchi Tadqiqoti", "Testlar", "Analitika", "Prototiplashtirish"],
     lookingFor: "UX lider",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=kamola",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=kamola&backgroundColor=ffdfbf,b6e3f4",
     viloyat: "surxondaryo",
   },
   {
@@ -183,7 +183,7 @@ export const mockPeople: Person[] = [
     skills: ["Xavfsizlik Audit", "Penetratsion Test", "SIEM", "Xavfsizlik"],
     lookingFor: "Xavfsizlik roli",
     available: true,
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=bobur",
+    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=bobur&backgroundColor=c0aede,d1d4f9",
     viloyat: "qoraqalpogiston",
   },
 ];

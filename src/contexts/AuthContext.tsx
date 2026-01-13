@@ -12,6 +12,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: (credential: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           if (res.ok) {
             const data = await res.json();
+            console.log("👤 Auth user loaded:", data.user);
             setUser(data.user);
           } else {
             localStorage.removeItem('token');
@@ -85,6 +87,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async (credential: string) => {
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Google login failed');
+      
+      console.log("🎉 Google sign-in response:", data);
+      localStorage.setItem('token', data.token);
+      setUser(data.user);
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  };
+
   const signOut = async () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -93,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, signIn, signUp, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );

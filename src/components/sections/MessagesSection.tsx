@@ -29,7 +29,8 @@ export function MessagesSection({ onProjectClick }: MessagesSectionProps) {
         queryKey: ['user-projects'],
         queryFn: async () => {
             const token = localStorage.getItem('token');
-            const allProjects = await api.get('/projects', token || undefined);
+            const projectsResponse = await api.get('/projects', token || undefined);
+            const allProjects = projectsResponse?.data || projectsResponse || [];
             const myProjects = allProjects.filter((p: any) => p.user_id === user?.id);
             const memberProjects = await api.get(`/projects/${user?.id}/member-projects`, token)
                 .catch(() => []); // Fallback if endpoint doesn't exist yet

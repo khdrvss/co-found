@@ -1,4 +1,5 @@
-const API_URL = '/api';
+// Use environment variable for API URL, fallback to proxy path
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Custom error class for API errors
 export class ApiError extends Error {
@@ -123,7 +124,9 @@ export const api = {
   async put<T = any>(endpoint: string, data: any, token?: string): Promise<T> {
     return makeRequest<T>(endpoint, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(data),
       token,
     });

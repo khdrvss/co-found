@@ -135,7 +135,7 @@ GET  /api/health
 
 ## 🐳 Docker Deployment
 
-See [DEPLOY_NEW.md](./DEPLOY_NEW.md) for detailed deployment instructions.
+See [DEPLOY.md](./DEPLOY.md) for detailed deployment instructions.
 
 ```bash
 # Production build
@@ -162,33 +162,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
-- [Deployment Guide](./DEPLOY_NEW.md)
-- [Developer Guide](./DEVELOPER_GUIDE_NEW.md)
+- [Deployment Guide](./DEPLOY.md)
+- [Developer Guide](./DEVELOPER_GUIDE.md)
+- [Docker Guide](./DOCKER_GUIDE.md)
 - [API Documentation](./API_DOCS.md)
 
 ## 📞 Support
 
 For support, email support@co-found.uz or join our Telegram channel.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
