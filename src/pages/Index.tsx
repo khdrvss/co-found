@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, UserPlus, FolderSearch, LogIn } from "lucide-react";
 import { Sidebar, SidebarTab } from "@/components/layout/Sidebar";
@@ -29,6 +29,7 @@ import { toast } from "@/hooks/use-toast";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { cn, getAvatarUrl } from "@/lib/utils";
 import { PrivateChatDialog } from "@/components/dialogs/PrivateChatDialog";
+import MessageNotifier from "@/components/notifications/MessageNotifier";
 
 const ITEMS_PER_PAGE = 8;
 
@@ -62,6 +63,19 @@ const Index = () => {
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogMode, setAuthDialogMode] = useState<"login" | "signup">("login");
   const [privateChatPartner, setPrivateChatPartner] = useState<{ partnerId: string; partnerName: string; partnerAvatar?: string } | null>(null);
+
+  useEffect(() => {
+    // open-private-chat event opens a private chat from anywhere (notifications)
+    const onOpen = (e: any) => {
+      const detail = e?.detail;
+      if (detail?.partnerId) {
+        setPrivateChatPartner({ partnerId: detail.partnerId, partnerName: detail.partnerName, partnerAvatar: detail.partnerAvatar });
+      }
+    };
+    window.addEventListener('open-private-chat', onOpen as EventListener);
+    return () => window.removeEventListener('open-private-chat', onOpen as EventListener);
+  }, []);
+
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -501,6 +515,8 @@ const Index = () => {
         onOpenChange={setAuthDialogOpen}
         defaultMode={authDialogMode}
       />
+
+      <MessageNotifier />
 
       {privateChatPartner && (
         <PrivateChatDialog

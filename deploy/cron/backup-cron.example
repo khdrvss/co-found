@@ -1,0 +1,5 @@
+# Example crontab entry to run the backup script nightly at 01:00
+# Place in the crontab for the user that owns the app files (e.g., 'cofound')
+
+# m h dom mon dow command
+0 1 * * * cd /var/www/co-found && ./scripts/backup-db.sh > /var/log/cofound/backup-$(date +\%F).log 2>&1

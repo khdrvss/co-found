@@ -1,0 +1,19 @@
+[Unit]
+Description=Co-found application (Docker Compose)
+After=network.target
+
+[Service]
+Type=notify
+User=cofound
+Group=cofound
+WorkingDirectory=/var/www/co-found
+EnvironmentFile=/etc/cofound/env
+ExecStart=/usr/bin/docker compose -f /var/www/co-found/docker-compose.prod.yml up --remove-orphans --build
+ExecStop=/usr/bin/docker compose -f /var/www/co-found/docker-compose.prod.yml down
+Restart=always
+RestartSec=5s
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

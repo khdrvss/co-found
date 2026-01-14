@@ -24,7 +24,7 @@ WORKDIR /app
 
 # Install all dependencies (including dev deps for build)
 COPY package*.json ./
-RUN npm ci && npm install -g tsx
+RUN npm ci
 
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
@@ -34,11 +34,15 @@ COPY src ./src
 COPY migrations ./migrations
 COPY schema.sql ./
 COPY tsconfig*.json ./
+COPY tsconfig.server.json ./
 COPY prisma ./prisma
 COPY docs ./docs
 
 # Create uploads directory
 RUN mkdir -p uploads && chown -R node:node /app
+
+# Build the server JS
+RUN npm run build:server || true
 
 # Switch to non-root user
 USER node
@@ -55,4 +59,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:5000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
 
 # Start the server
-CMD ["tsx", "src/server/index.ts"]
+CMD ["node", "dist/server/index.js"]

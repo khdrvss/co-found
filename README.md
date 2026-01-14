@@ -145,6 +145,76 @@ docker-compose -f docker-compose.prod.yml up -d
 docker-compose up -d
 ```
 
+## 🔁 Local Redis scaling smoke test
+
+To validate the Socket.IO Redis adapter locally (checks cross-instance pub/sub):
+
+1. Start services including Redis and a secondary app instance (dev profile)
+
+```bash
+# Start DB + Redis + primary app
+docker compose up -d db redis app
+
+# Start a second app instance on port 5001 (profile 'local')
+docker compose --profile local up -d app2
+```
+
+2. Run the smoke test (this script will create two users, connect a socket to each app instance, send a message from app:5000 and verify `message.created` arrives at app2:5001):
+
+```bash
+npm run smoke:redis
+```
+
+Expected outcome: the test prints that both sockets connected and you see `sockB got message` even though the message was sent through the other app instance — this confirms Redis adapter pub/sub is functioning.
+
+Notes:
+- In production set `REDIS_URL` to your managed Redis instance and ensure `REDIS_URL` is present in the env for all API instances.
+- This test is intentionally simple; for full load testing consider using `k6` or `ghz` to simulate thousands of concurrent sockets.
+
+## 🛠️ VPS Deployment (Docker)
+
+These are the minimal steps to deploy on a VPS using Docker Compose (recommended for small clusters):
+
+1. Prepare the server and clone the repo
+
+```bash
+ssh your-vps
+sudo apt update && sudo apt install -y docker docker-compose
+git clone https://github.com/khdrvss/co-found.git
+cd co-found
+```
+
+2. Configure environment
+
+- Copy `.env.example` to `.env` and set production values (DATABASE_URL, JWT_SECRET, REDIS_URL, VITE_API_URL, etc.)
+
+3. Build & migrate
+
+```bash
+# Build and start DB and Redis and app
+docker compose -f docker-compose.prod.yml up -d --build
+
+# Run migrations once (idempotent)
+docker compose -f docker-compose.prod.yml run --rm app npm run migrate
+```
+
+4. Start services
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+5. Verify health
+
+```bash
+curl -fS http://localhost:5000/api/health | jq
+```
+
+Notes:
+- For zero-downtime and scaling, use a load balancer and run multiple `app` instances (e.g. `docker compose up --scale app=3 -d`).
+- Always run the migrations from a single control node prior to scaling new app instances.
+- Add monitoring (Prometheus, Sentry) and backups for DB before going to production.
+
 ## 🤝 Contributing
 
 1. Fork the repository

@@ -1,0 +1,78 @@
+name: Load Test (k6)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0' # weekly on Sunday 03:00 UTC
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Set env
+        run: |
+          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres" >> $GITHUB_ENV
+          echo "REDIS_URL=redis://127.0.0.1:6379" >> $GITHUB_ENV
+
+      - name: Apply migrations
+        run: npm run migrate
+
+      - name: Start server
+        run: |
+          PORT=4000 npm run server &
+          sleep 2
+
+      - name: Wait for server
+        run: |
+          for i in {1..30}; do curl -fsS http://localhost:4000/api/health && break || sleep 1; done
+
+      - name: Install k6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Run k6 load test
+        run: |
+          k6 run tests/k6/conversation.js -e TARGET=http://localhost:4000
+
+      - name: Upload k6 summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-report
+          path: ./results || .
+
+      - name: Notify Slack on success
+        if: success() && secrets.SLACK_WEBHOOK != ''
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"k6 load test succeeded for run ${{ github.run_id }}\"}" ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Notify Slack on failure
+        if: failure() && secrets.SLACK_WEBHOOK != ''
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"k6 load test *failed* for run ${{ github.run_id }}. See logs: ${{ github.run_url }}\"}" ${{ secrets.SLACK_WEBHOOK }}

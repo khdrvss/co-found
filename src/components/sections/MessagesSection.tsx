@@ -1,28 +1,28 @@
-
 import { MessageCircle, Users, Clock, User } from "lucide-react";
 import { EmptyStateAnimated } from "@/components/ui/empty-state-animated";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ProjectChatDialog } from "@/components/dialogs/ProjectChatDialog";
 import { PrivateChatDialog } from "@/components/dialogs/PrivateChatDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { SEO } from "@/components/SEO";
+import { toast } from "@/components/ui/use-toast";
 
 interface MessagesSectionProps {
     onProjectClick?: (project: any) => void;
 }
-
-
 
 export function MessagesSection({ onProjectClick }: MessagesSectionProps) {
     const { t } = useLanguage();
     const { user } = useAuth();
     const [selectedChat, setSelectedChat] = useState<any>(null);
     const [selectedPrivateChat, setSelectedPrivateChat] = useState<any>(null);
+    const [lastSeen, setLastSeen] = useState<string | null>(null);
+    const [unread, setUnread] = useState(0);
 
     // Get user's projects
     const { data: projects = [], isLoading: loadingProjects } = useQuery({
@@ -51,6 +51,39 @@ export function MessagesSection({ onProjectClick }: MessagesSectionProps) {
         enabled: !!user
     });
 
+    useEffect(() => {
+        if (!user) return;
+        // calculate unread by checking if conversation last_message_at > lastSeen
+        const count = conversations.filter((c: any) => c.last_message_at && (!lastSeen || new Date(c.last_message_at) > new Date(lastSeen))).length;
+        setUnread(count);
+    }, [conversations, lastSeen, user]);
+
+    // Show a small toast when a new private message arrives
+    useEffect(() => {
+        if (conversations.length === 0) return;
+        if (!lastSeen) {
+            setLastSeen(conversations[0].last_message_at);
+            return;
+        }
+        const mostRecent = conversations[0];
+        if (mostRecent.last_message_at && new Date(mostRecent.last_message_at) > new Date(lastSeen)) {
+            // Show a creative UI toast
+            toast({
+                title: mostRecent.full_name || mostRecent.email,
+                description: mostRecent.last_message || "Yangi xabar",
+                action: (
+                    <button
+                        onClick={() => setSelectedPrivateChat({ id: mostRecent.id, full_name: mostRecent.full_name, avatar_url: mostRecent.avatar_url })}
+                        className="px-3 py-1 rounded bg-primary text-primary-foreground text-sm"
+                    >
+                        O'qing
+                    </button>
+                )
+            });
+            setLastSeen(mostRecent.last_message_at);
+        }
+    }, [conversations]);
+
     if (loadingProjects || loadingConversations) {
         return (
             <div className="flex items-center justify-center p-20">
@@ -65,7 +98,7 @@ export function MessagesSection({ onProjectClick }: MessagesSectionProps) {
             <Tabs defaultValue="groups" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
                     <TabsTrigger value="groups">Guruhlar</TabsTrigger>
-                    <TabsTrigger value="private">Shaxsiy</TabsTrigger>
+                    <TabsTrigger value="private">Shaxsiy {unread > 0 && (<span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs">{unread}</span>)}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="groups" className="animate-fade-in-up mt-6">
@@ -114,7 +147,12 @@ export function MessagesSection({ onProjectClick }: MessagesSectionProps) {
                             {conversations.map((conv: any) => (
                                 <button
                                     key={conv.id}
-                                    onClick={() => setSelectedPrivateChat(conv)}
+                                    onClick={() => {
+                                        setSelectedPrivateChat(conv);
+                                        // mark as read when opening
+                                        const token = localStorage.getItem('token');
+                                        fetch('/api/messages/private/' + conv.id + '/read', { method: 'PUT', headers: token ? { 'Authorization': 'Bearer ' + token } : {} }).catch(() => {});
+                                    }}
                                     className="glass rounded-xl p-4 text-left hover:bg-secondary/50 transition-all duration-300 group flex items-center gap-4"
                                 >
                                     <div className="relative">
@@ -123,6 +161,11 @@ export function MessagesSection({ onProjectClick }: MessagesSectionProps) {
                                             alt={conv.full_name}
                                             className="w-12 h-12 rounded-full object-cover bg-secondary"
                                         />
+                                        {conv.unread_count > 0 && (
+                                            <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs">
+                                                {conv.unread_count > 99 ? '99+' : conv.unread_count}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-start mb-1">

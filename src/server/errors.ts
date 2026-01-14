@@ -4,6 +4,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { httpErrors } from './metrics';
 
 /**
  * Custom error class for API errors
@@ -112,7 +113,13 @@ export function errorHandler(
       timestamp: new Date().toISOString(),
     });
   } else {
-    // Unexpected error
+    // Unexpected error - increment HTTP 5xx counter for monitoring
+    try {
+      httpErrors.inc();
+    } catch (e) {
+      // ignore metric errors
+    }
+
     res.status(500).json({
       error: 'Internal server error',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined,

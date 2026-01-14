@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Check, CheckSquare } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface Message {
     id: string;
@@ -10,6 +12,11 @@ export interface Message {
     created_at: string;
     sender_avatar?: string;
     sender_name?: string;
+    // New: delivery/read receipts
+    delivered?: boolean;
+    delivered_at?: string | null;
+    read?: boolean;
+    read_at?: string | null;
 }
 
 interface ChatMessageProps {
@@ -29,6 +36,24 @@ export function ChatMessage({ message, currentUserId, partnerAvatar, partnerName
     const senderIdString = String(message.sender_id).trim();
     const currentUserIdString = String(currentUserId).trim();
     const isMine = senderIdString === currentUserIdString;
+
+    const reduceMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const [flash, setFlash] = useState(false);
+    const flashTimerRef = useRef<number | null>(null);
+    const prevReadRef = useRef<boolean | undefined>(message.read);
+
+    useEffect(() => {
+        if (message.read && !prevReadRef.current) {
+            setFlash(true);
+            if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+            flashTimerRef.current = window.setTimeout(() => setFlash(false), 700);
+        }
+        prevReadRef.current = message.read;
+        return () => {
+            if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+        };
+    }, [message.read]);
 
     return (
         <div className={cn(
@@ -55,7 +80,22 @@ export function ChatMessage({ message, currentUserId, partnerAvatar, partnerName
                 <p className="leading-relaxed whitespace-pre-wrap break-words">{message.message}</p>
             </div>
 
-            {/* Outgoing Avatar - Hidden as per standard messenger style */}
+            {/* Delivery / Read indicator for outgoing messages */}
+            {isMine && (
+                <div className="w-[80px] text-[11px] text-muted-foreground text-right flex items-center justify-end gap-1">
+                    {message.read ? (
+                        <div className={cn("flex items-center gap-1", reduceMotion ? '' : 'transition-transform duration-200')}> 
+                            <CheckSquare className={cn("w-4 h-4 text-sky-400", !reduceMotion && flash ? 'scale-110' : '')} />
+                            <span className="text-xs">{message.read_at ? format(new Date(message.read_at), 'HH:mm') : 'Seen'}</span>
+                        </div>
+                    ) : message.delivered ? (
+                        <div className={cn("flex items-center gap-1", reduceMotion ? '' : 'opacity-80')}> 
+                            <Check className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-xs">{message.delivered_at ? format(new Date(message.delivered_at), 'HH:mm') : 'Delivered'}</span>
+                        </div>
+                    ) : null}
+                </div>
+            )}
         </div>
     );
 }

@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +15,7 @@ import { AdminUsers } from "./pages/admin/AdminUsers";
 import { AdminProjects } from "./pages/admin/AdminProjects";
 
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import SocketManager from "./components/SocketManager";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +29,7 @@ const App = () => (
         <LanguageProvider>
           <AuthProvider>
             <TooltipProvider>
+              <SocketManager />
               <Toaster />
               <Sonner />
               <BrowserRouter>

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { query } from './db';
+import { getJwtSecret } from './config';
 import {
   signUpSchema,
   loginSchema,
@@ -32,9 +33,12 @@ import {
   sanitizers,
 } from './sanitize';
 import logger from './logger';
+import { emitToUser } from './socket';
+import { messageRateLimiter } from './message-rate-limiter';
+import { messagesSent, messagesRead } from './metrics';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const JWT_SECRET = getJwtSecret();
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
@@ -537,15 +541,20 @@ router.get('/messages/private/:partnerId', authenticateToken, asyncHandler(async
     const offset = (page - 1) * limit;
 
     const result = await query(
-      `SELECT id, sender_id, receiver_id, message, created_at
-       FROM private_messages
-       WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)
-       ORDER BY created_at DESC
+      `SELECT pm.id, pm.sender_id, pm.receiver_id, pm.message, pm.created_at, pm.read,
+              COALESCE(p.full_name, u.email) as sender_name,
+              p.avatar_url as sender_avatar
+       FROM private_messages pm
+       JOIN users u ON u.id = pm.sender_id
+       LEFT JOIN profiles p ON p.user_id = pm.sender_id
+       WHERE (pm.sender_id = $1 AND pm.receiver_id = $2) OR (pm.sender_id = $2 AND pm.receiver_id = $1)
+       ORDER BY pm.created_at ASC
        LIMIT $3 OFFSET $4`,
       [userId, partnerId, limit, offset]
     );
 
-    res.json({ messages: result.rows.reverse() });
+    // Return array directly for simplicity
+    res.json(result.rows);
   } catch (error) {
     if (error instanceof ValidationError) {
       throw error;
@@ -556,7 +565,7 @@ router.get('/messages/private/:partnerId', authenticateToken, asyncHandler(async
 }));
 
 // Send private message with validation
-router.post('/messages/private', authenticateToken, asyncHandler(async (req: any, res: Response) => {
+router.post('/messages/private', authenticateToken, messageRateLimiter, asyncHandler(async (req: any, res: Response) => {
   try {
     const { receiverId, message } = req.body;
     const senderId = req.user.userId;
@@ -577,13 +586,57 @@ router.post('/messages/private', authenticateToken, asyncHandler(async (req: any
       throw new ValidationError('Cannot send message to yourself');
     }
 
-    const result = await query(
+    const insert = await query(
       `INSERT INTO private_messages (sender_id, receiver_id, message)
        VALUES ($1, $2, $3) RETURNING *`,
       [senderId, receiverId, message]
     );
 
-    res.status(201).json(result.rows[0]);
+    const newMsg = insert.rows[0];
+
+    // Fetch sender profile info to enrich response
+    const senderRes = await query(
+      'SELECT COALESCE(p.full_name, u.email) as sender_name, p.avatar_url as sender_avatar FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = $1',
+      [senderId]
+    );
+
+    const enriched = {
+      id: newMsg.id,
+      sender_id: newMsg.sender_id,
+      receiver_id: newMsg.receiver_id,
+      message: newMsg.message,
+      created_at: newMsg.created_at,
+      sender_name: senderRes.rows[0]?.sender_name,
+      sender_avatar: senderRes.rows[0]?.sender_avatar,
+    };
+
+    // Compute unread counts for both parties to provide a better real-time payload
+    try {
+      const unreadForReceiverRes = await query(
+        'SELECT COUNT(*) as count FROM private_messages WHERE sender_id = $1 AND receiver_id = $2 AND read = false',
+        [senderId, receiverId]
+      );
+      const unreadForReceiver = parseInt(unreadForReceiverRes.rows[0]?.count || '0', 10) || 0;
+
+      const unreadForSenderRes = await query(
+        'SELECT COUNT(*) as count FROM private_messages WHERE sender_id = $1 AND receiver_id = $2 AND read = false',
+        [receiverId, senderId]
+      );
+      const unreadForSender = parseInt(unreadForSenderRes.rows[0]?.count || '0', 10) || 0;
+
+      // Emit real-time events to both the receiver and sender
+      emitToUser(receiverId, 'message.created', { ...enriched, unread_count: unreadForReceiver });
+      emitToUser(senderId, 'message.created', { ...enriched, unread_count: unreadForSender });
+
+      // Metrics
+      try {
+        messagesSent.inc();
+      } catch (e) {}
+    } catch (err) {
+      logger.warn('Failed to emit socket message events', { err });
+    }
+
+    res.status(201).json(enriched);
   } catch (error) {
     if (error instanceof ValidationError) {
       throw error;
@@ -681,6 +734,94 @@ router.post('/projects/:projectId/messages', authenticateToken, asyncHandler(asy
     }
     logError(error instanceof Error ? error : new Error(String(error)), 'Send project message');
     throw new DatabaseError('Failed to send message', error instanceof Error ? error.message : undefined);
+  }
+}));
+
+// Get conversation list for current user (include unread_count)
+router.get('/messages/conversations', authenticateToken, asyncHandler(async (req: any, res: Response) => {
+  try {
+    const userId = req.user.userId;
+
+    const result = await query(
+      `WITH partners AS (
+         SELECT CASE WHEN sender_id = $1 THEN receiver_id ELSE sender_id END AS partner_id,
+                MAX(created_at) AS last_message_at
+         FROM private_messages
+         WHERE sender_id = $1 OR receiver_id = $1
+         GROUP BY partner_id
+       )
+       SELECT
+         p.partner_id as id,
+         pm.message as last_message,
+         pm.created_at as last_message_at,
+         pm.sender_id as last_sender_id,
+         u.email,
+         prof.full_name,
+         prof.avatar_url,
+         (SELECT COUNT(*) FROM private_messages pm2 WHERE pm2.sender_id = p.partner_id AND pm2.receiver_id = $1 AND pm2.read = false) as unread_count
+       FROM partners p
+       JOIN LATERAL (
+         SELECT message, created_at, sender_id
+         FROM private_messages pm
+         WHERE (pm.sender_id = $1 AND pm.receiver_id = p.partner_id) OR (pm.receiver_id = $1 AND pm.sender_id = p.partner_id)
+         ORDER BY pm.created_at DESC LIMIT 1
+       ) pm ON true
+       JOIN users u ON u.id = p.partner_id
+       LEFT JOIN profiles prof ON prof.user_id = p.partner_id
+       ORDER BY p.last_message_at DESC`,
+      [userId]
+    );
+
+    const mapped = result.rows.map((r: any) => ({
+      id: r.id,
+      email: r.email,
+      full_name: r.full_name,
+      avatar_url: r.avatar_url,
+      last_message: r.last_message,
+      last_message_at: r.last_message_at,
+      last_sender_id: r.last_sender_id,
+      unread_count: parseInt(r.unread_count, 10) || 0,
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    logError(error instanceof Error ? error : new Error(String(error)), 'Get conversations');
+    throw new DatabaseError('Failed to retrieve conversations');
+  }
+}));
+
+// Mark private messages as read
+router.put('/messages/private/:partnerId/read', authenticateToken, asyncHandler(async (req: any, res: Response) => {
+  try {
+    const { partnerId } = req.params;
+    const userId = req.user.userId;
+
+    if (!partnerId || partnerId.length === 0) {
+      throw new ValidationError('Invalid partner ID');
+    }
+
+    const readUpTo = new Date().toISOString();
+
+    const result = await query(
+      `UPDATE private_messages SET read = true, read_at = $1 WHERE sender_id = $2 AND receiver_id = $3 AND (read = false OR read_at IS NULL) RETURNING id`,
+      [readUpTo, partnerId, userId]
+    );
+
+    // Notify the partner that their messages were read so they can update unread counts and per-message state in real-time
+    try {
+      emitToUser(partnerId, 'messages.read', { by: userId, updated: result.rows.length, read_up_to: readUpTo });
+    } catch (err) {
+      logger.warn('Failed to emit messages.read event', { err });
+    }
+
+    try {
+      messagesRead.inc(result.rows.length || 0);
+    } catch (e) {}
+
+    res.json({ updated: result.rows.length, read_up_to: readUpTo });
+  } catch (error) {
+    logError(error instanceof Error ? error : new Error(String(error)), 'Mark messages read');
+    throw new DatabaseError('Failed to mark messages as read');
   }
 }));
 

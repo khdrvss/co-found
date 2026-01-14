@@ -29,6 +29,9 @@ interface PrivateChatDialogProps {
 
 export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open, onOpenChange, overlayDisabled = false }: PrivateChatDialogProps) {
     const [newMessage, setNewMessage] = useState("");
+    const [partnerTyping, setPartnerTyping] = useState(false);
+    const typingTimeoutRef = useRef<number | null>(null);
+    const lastTypingEmitRef = useRef<number>(0);
     const scrollRef = useRef<HTMLDivElement>(null);
     const { user, isAuthenticated } = useAuth();
     const navigate = useNavigate();
@@ -56,7 +59,8 @@ export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open,
                 if (!partnerId) return [];
                 const token = localStorage.getItem('token');
                 const res = await api.get(`/messages/private/${partnerId}`, token);
-                return res; // may be { messages: [] } or array
+                // res is an array of messages
+                return res;
             } catch (err: any) {
                 console.error('Failed to load private messages', err);
                 toast({ title: 'Xatolik', description: err?.message || 'Xabarlar yuklanmadi', variant: 'destructive' });
@@ -67,10 +71,8 @@ export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open,
         refetchInterval: 3000, // Poll every 3 seconds
     });
 
-    // Normalize response (API may return { messages: [...] } or an array)
-    const messages: Message[] = Array.isArray(rawMessages)
-        ? rawMessages
-        : (rawMessages && typeof rawMessages === 'object' && Array.isArray((rawMessages as any).messages) ? (rawMessages as any).messages : []);
+    // rawMessages should already be an array
+    const messages: Message[] = Array.isArray(rawMessages) ? rawMessages : [];
 
     useEffect(() => {
         scrollToBottom();
@@ -80,15 +82,21 @@ export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open,
         mutationFn: async (message: string) => {
             try {
                 const token = localStorage.getItem('token');
-                return await api.post('/messages/private', { receiverId: partnerId, message }, token);
+                const res = await api.post('/messages/private', { receiverId: partnerId, message }, token);
+                return res as any; // enriched message
             } catch (err: any) {
                 console.error('Failed to send message', err);
                 toast({ title: 'Xatolik', description: err?.message || 'Xabar yuborilmadi', variant: 'destructive' });
                 throw err;
             }
         },
-        onSuccess: () => {
+        onSuccess: (newMsg: any) => {
             setNewMessage("");
+            // Update cache manually to append newly sent message at the end
+            queryClient.setQueryData(['private-messages', partnerId], (old: any) => {
+                const arr = Array.isArray(old) ? old : (old?.messages || []);
+                return [...arr, newMsg];
+            });
             queryClient.invalidateQueries({ queryKey: ['private-messages', partnerId] });
         }
     });
@@ -107,17 +115,62 @@ export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open,
         sendMessageMutation.mutate(newMessage);
     };
 
-    // If dialog is opened without a partnerId, close immediately to avoid blank overlay
-    useEffect(() => {
-        if (open && !partnerId) {
-            toast({ title: 'Xatolik', description: 'Foydalanuvchi notogri', variant: 'destructive' });
-            onOpenChange(false);
+    // Throttled typing emission
+    const handleTyping = () => {
+        const now = Date.now();
+        if (now - lastTypingEmitRef.current > 2500) {
+            lastTypingEmitRef.current = now;
+            window.dispatchEvent(new CustomEvent('socket:emit-typing', { detail: { to: partnerId } }));
         }
-    }, [open, partnerId, onOpenChange]);
+    };
 
     useEffect(() => {
-        console.debug('PrivateChatDialog opened with', { open, partnerId, partnerName });
-    }, [open, partnerId, partnerName]);
+        const handler = (e: any) => {
+            const from = String(e?.detail?.from || '');
+            if (String(partnerId) !== from) return;
+            setPartnerTyping(true);
+            if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = window.setTimeout(() => setPartnerTyping(false), 2500);
+        };
+
+        window.addEventListener('socket:typing', handler as EventListener);
+        return () => {
+            window.removeEventListener('socket:typing', handler as EventListener);
+            if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+        };
+    }, [partnerId]);
+
+    useEffect(() => {
+        // when dialog opens, mark all from partner as read
+        if (open && partnerId) {
+            const token = localStorage.getItem('token');
+            fetch(`/api/messages/private/${partnerId}/read`, { method: 'PUT', headers: token ? { 'Authorization': 'Bearer ' + token } : {} })
+                .then(async (res) => {
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    const readUpTo = data?.read_up_to;
+
+                    if (readUpTo) {
+                        // mark local cache messages (from partner) as read up to readUpTo
+                        queryClient.setQueryData(['private-messages', partnerId], (old: any) => {
+                            if (!Array.isArray(old)) return old;
+                            const cutoff = new Date(readUpTo).getTime();
+                            return old.map((m: any) => {
+                                if (String(m.sender_id) === String(partnerId) && new Date(m.created_at).getTime() <= cutoff) {
+                                    return { ...m, read: true, read_at: readUpTo };
+                                }
+                                return m;
+                            });
+                        });
+
+                        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                    } else {
+                        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                    }
+                })
+                .catch(() => { });
+        }
+    }, [open, partnerId]);
 
     if (!open) return null;
 
@@ -138,12 +191,12 @@ export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open,
                             </Avatar>
                             <div>
                                 <DialogTitle>{partnerName}</DialogTitle>
-                                <p className="text-xs text-muted-foreground">{isLoading ? "Connecting..." : "Online"}</p>
+                                <p className="text-xs text-muted-foreground">{partnerTyping ? '... yozmoqda' : (isLoading ? 'Connecting...' : 'Online')}</p>
                             </div>
                         </div>
                     </DialogHeader>
 
-                    <ScrollArea className="flex-1 p-4 bg-background/30">
+                    <ScrollArea className="flex-1 p-4 bg-background/30" aria-live="polite" aria-atomic="false">
                         <div className="space-y-1">
                             {isLoading ? (
                                 <div className="flex justify-center p-4">
@@ -164,16 +217,30 @@ export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open,
                                     />
                                 ))
                             )}
+
+                            {/* Typing indicator */}
+                            {partnerTyping && (
+                                <div className="flex items-start gap-2 mt-2">
+                                    <div className="bg-[#3E4042] rounded-lg py-2 px-3">
+                                        <div className="flex gap-2 items-center">
+                                            <span className={"w-2 h-2 rounded-full bg-white"} style={{ animationDelay: '0ms' }} />
+                                            <span className={"w-2 h-2 rounded-full bg-white"} style={{ animationDelay: '120ms' }} />
+                                            <span className={"w-2 h-2 rounded-full bg-white"} style={{ animationDelay: '240ms' }} />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div ref={scrollRef} />
                         </div>
                     </ScrollArea>
 
                     <div className="p-4 border-t border-border/50 bg-background/50 backdrop-blur-sm">
-                        <form onSubmit={handleSend} className="flex gap-2">
+                        <form onSubmit={handleSend} className="flex gap-2" aria-label="Send message form">
                             <Input
                                 value={newMessage}
-                                onChange={(e) => setNewMessage(e.target.value)}
+                                onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }}
                                 placeholder="Xabar yozing..."
+                                aria-label="Write a message"
                                 className="bg-secondary/50 border-0 focus-visible:ring-1"
                                 disabled={sendMessageMutation.isPending}
                             />
@@ -182,6 +249,7 @@ export function PrivateChatDialog({ partnerId, partnerName, partnerAvatar, open,
                                 size="icon"
                                 className="shrink-0 shadow-glow"
                                 disabled={sendMessageMutation.isPending || !newMessage.trim()}
+                                aria-label="Send message"
                             >
                                 <Send className="w-4 h-4" />
                             </Button>

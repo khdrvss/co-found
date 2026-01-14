@@ -1,0 +1,97 @@
+name: DB Backup & Restore Test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *' # nightly at 01:00 UTC
+
+jobs:
+  backup-restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Set DATABASE_URL
+        run: |
+          echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres" >> $GITHUB_ENV
+
+      - name: Apply migrations
+        run: npm run migrate
+
+      - name: Create backup
+        run: |
+          mkdir -p artifacts
+          ./scripts/backup-db.sh > /dev/null
+          ls -la
+          # find backup file
+          BACKUP=$(ls -t backup-*.sql | head -n1)
+          echo "Backup file: $BACKUP"
+          mv "$BACKUP" artifacts/
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup
+          path: artifacts/
+
+      - name: Start restore DB
+        run: |
+          docker run -d --name pg-restore -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=restore_db -p 5433:5432 postgres:15-alpine
+          for i in {1..30}; do pg_isready -h 127.0.0.1 -p 5433 -U postgres && break || sleep 1; done
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: db-backup
+
+      - name: Restore backup into restore DB
+        run: |
+          BACKUP=$(ls -t artifacts/backup-*.sql | head -n1)
+          echo "Restoring $BACKUP"
+          DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/restore_db ./scripts/restore-db.sh "$BACKUP"
+
+      - name: Verify restore
+        run: |
+          PSQL="psql postgresql://postgres:postgres@127.0.0.1:5433/restore_db -c"
+          $PSQL "SELECT COUNT(*) FROM users;"
+          $PSQL "SELECT COUNT(*) FROM private_messages;"
+
+      - name: Notify Slack on success
+        if: success() && secrets.SLACK_WEBHOOK != ''
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"DB Backup & Restore succeeded for run ${{ github.run_id }}\"}" ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Notify Slack on failure
+        if: failure() && secrets.SLACK_WEBHOOK != ''
+        run: |
+          curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"DB Backup & Restore *failed* for run ${{ github.run_id }}. See logs: ${{ github.run_url }}\"}" ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Upload backup to S3 (optional)
+        if: secrets.AWS_S3_BUCKET != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          chmod +x ./scripts/upload-backup-to-s3.sh
+          ./scripts/upload-backup-to-s3.sh

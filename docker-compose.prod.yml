@@ -1,9 +1,94 @@
 version: '3.8'
 
 services:
-  nginx-proxy:
+  traefik:
+    image: traefik:v2.10
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entryPoints.web.address=:80
+      - --entryPoints.websecure.address=:443
+      - --entryPoints.web.http.redirections.entryPoint.to=websecure
+      - --entryPoints.web.http.redirections.entryPoint.scheme=https
+      - --certificatesResolvers.letsencrypt.acme.httpChallenge=true
+      - --certificatesResolvers.letsencrypt.acme.httpChallenge.entryPoint=web
+      - --certificatesResolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}
+      - --log.level=INFO
     ports:
       - "80:80"
       - "443:443"
-  acme-companion:
-    profiles: ["prod"]
+      - "8080:8080" # Traefik dashboard (optional)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/traefik/acme.json:/acme.json
+    restart: always
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-cofound_prod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:5000}
+      VITE_FRONTEND_URL: ${VITE_FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cofound.rule=Host(`co-found.uz`)"
+      - "traefik.http.routers.cofound.entrypoints=websecure"
+      - "traefik.http.routers.cofound.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cofound.loadbalancer.server.port=5000"
+      # www -> non-www redirect
+      - "traefik.http.routers.cofound-www.rule=Host(`www.co-found.uz`)"
+      - "traefik.http.routers.cofound-www.entrypoints=websecure"
+      - "traefik.http.routers.cofound-www.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.cofound-www.middlewares=redirect-to-nonwww@docker"
+      - "traefik.http.middlewares.redirect-to-nonwww.redirectregex.regex=^https?://www\\.(.*)"
+      - "traefik.http.middlewares.redirect-to-nonwww.redirectregex.replacement=https://co-found.uz/$1"
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fS http://localhost:5000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:

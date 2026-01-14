@@ -4,6 +4,8 @@ import "./index.css";
 
 import { HelmetProvider } from "react-helmet-async";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import * as Sentry from "@sentry/react";
+import { BrowserTracing } from "@sentry/tracing";
 
 // Debug: Check if script is running
 console.log("🚀 Co-found.uz main.tsx loaded");
@@ -11,11 +13,23 @@ console.log("🌍 Environment:", import.meta.env.MODE);
 console.log("🔗 API URL:", import.meta.env.VITE_API_URL);
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
-console.log("🔑 Google Client ID:", GOOGLE_CLIENT_ID ? `✅ Loaded (${GOOGLE_CLIENT_ID.substring(0, 20)}...)` : "❌ Missing");
+console.log(
+  "🔑 Google Client ID:",
+  GOOGLE_CLIENT_ID ? `✅ Loaded (${GOOGLE_CLIENT_ID.substring(0, 20)}...)` : "❌ Missing"
+);
 
 if (!GOOGLE_CLIENT_ID) {
   console.error("❌ VITE_GOOGLE_CLIENT_ID is not set in environment variables!");
   console.error("Available env vars:", import.meta.env);
+}
+
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    integrations: [new BrowserTracing()],
+    tracesSampleRate: parseFloat(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE || "0.1"),
+  });
 }
 
 const rootElement = document.getElementById("root");
@@ -24,14 +38,14 @@ if (!rootElement) {
   document.body.innerHTML = '<div style="color: white; padding: 20px;">ERROR: Root element not found</div>';
 } else {
   console.log("✅ Root element found, mounting React app...");
-  
+
   try {
     createRoot(rootElement).render(
-        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-            <HelmetProvider>
-                <App />
-            </HelmetProvider>
-        </GoogleOAuthProvider>
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <HelmetProvider>
+          <App />
+        </HelmetProvider>
+      </GoogleOAuthProvider>
     );
     console.log("✅ React app mounted successfully");
   } catch (error) {
