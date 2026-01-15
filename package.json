@@ -10,7 +10,7 @@
     "build:dev": "vite build --mode development",
     "build:server": "tsc -p tsconfig.server.json",
     "build:prod": "npm run build && npm run build:server",
-    "start": "node dist/server/index.js",
+    "start": "tsx src/server/index.ts",
     "start:dev": "npm run dev",
     "test": "vitest",
     "test:ui": "vitest --ui",

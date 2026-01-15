@@ -41,10 +41,7 @@ COPY docs ./docs
 # Create uploads directory
 RUN mkdir -p uploads
 
-# Build the server JS (must succeed)
-RUN npm run build:server
-
-# Fix permissions
+# Fix permissions (no need to build server, we use tsx)
 RUN chown -R node:node /app
 
 # Switch to non-root user
