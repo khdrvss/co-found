@@ -39,10 +39,13 @@ COPY prisma ./prisma
 COPY docs ./docs
 
 # Create uploads directory
-RUN mkdir -p uploads && chown -R node:node /app
+RUN mkdir -p uploads
 
-# Build the server JS
-RUN npm run build:server || true
+# Build the server JS (must succeed)
+RUN npm run build:server
+
+# Fix permissions
+RUN chown -R node:node /app
 
 # Switch to non-root user
 USER node
