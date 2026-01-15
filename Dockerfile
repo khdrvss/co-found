@@ -58,5 +58,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:5000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
 
-# Start the server
-CMD ["node", "dist/server/index.js"]
+# Start the server with tsx
+CMD ["npm", "start"]
