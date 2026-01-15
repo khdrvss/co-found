@@ -92,6 +92,10 @@ function getConfig(): Config {
  * Validate that required environment variables are set
  */
 function validateConfig(config: Config): void {
+  if (config.nodeEnv !== 'production') {
+    return; // Skip validation in development/test
+  }
+
   const requiredEnvVars = [
     'JWT_SECRET',
     'DB_HOST',
@@ -100,26 +104,26 @@ function validateConfig(config: Config): void {
     'DB_PASSWORD',
   ];
 
-  const missingVars = requiredEnvVars.filter((varName) => !process.env[varName]);
+  const missingVars = requiredEnvVars.filter((varName) => {
+    const value = process.env[varName];
+    return !value || value.trim() === '';
+  });
 
-  if (missingVars.length > 0 && config.nodeEnv === 'production') {
-    throw new Error(
-      `Missing required environment variables: ${missingVars.join(', ')}\n` +
-      'Please set these variables in your .env file before running the application.'
-    );
+  if (missingVars.length > 0) {
+    console.error('❌ FATAL: Missing required environment variables:', missingVars.join(', '));
+    console.error('Please set these variables in your docker-compose.prod.yml or .env file.');
+    process.exit(1);
   }
 
-  if (config.nodeEnv === 'production') {
-    if (config.jwt.secret === 'dev-secret-change-in-production') {
-      throw new Error(
-        'JWT_SECRET must be changed in production. ' +
-        'Set JWT_SECRET environment variable to a secure random string.'
-      );
-    }
+  if (config.jwt.secret === 'dev-secret-change-in-production' || config.jwt.secret.trim() === '') {
+    console.error('❌ FATAL: JWT_SECRET must be changed in production.');
+    console.error('Set JWT_SECRET environment variable to a secure random string.');
+    console.error('Example: JWT_SECRET=$(openssl rand -hex 32)');
+    process.exit(1);
+  }
 
-    if (config.apis.googleClientId === '') {
-      console.warn('⚠️  VITE_GOOGLE_CLIENT_ID not set. Google auth will be disabled.');
-    }
+  if (config.apis.googleClientId === '') {
+    console.warn('⚠️  VITE_GOOGLE_CLIENT_ID not set. Google auth will be disabled.');
   }
 }
 
