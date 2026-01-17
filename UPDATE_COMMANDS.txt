@@ -1,0 +1,27 @@
+B. UPDATE PHASE (VPS Only - New Version)
+
+export OLD_VERSION=1.0.0
+export NEW_VERSION=1.1.0
+export REGISTRY=ghcr.io
+export USERNAME=your-github-username
+export NEW_IMAGE=${REGISTRY}/${USERNAME}/co-found-app:${NEW_VERSION}
+
+cd /opt/docker/co-found
+
+echo ${GITHUB_TOKEN} | docker login ${REGISTRY} -u ${USERNAME} --password-stdin
+
+docker pull ${NEW_IMAGE}
+
+sed -i "s|image: .*co-found-app:.*|image: ${NEW_IMAGE}|" docker-compose.prod.yml
+
+docker compose -f docker-compose.prod.yml stop app
+
+docker compose -f docker-compose.prod.yml rm -f app
+
+docker compose -f docker-compose.prod.yml up -d app
+
+docker compose -f docker-compose.prod.yml ps app
+
+docker compose -f docker-compose.prod.yml logs -f app
+
+docker image prune -f

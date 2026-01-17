@@ -1,0 +1,20 @@
+A. BUILD PHASE (Developer Machine / CI/CD)
+
+export VERSION=1.0.0
+export REGISTRY=ghcr.io
+export USERNAME=your-github-username
+export IMAGE_NAME=${REGISTRY}/${USERNAME}/co-found-app:${VERSION}
+
+cd /path/to/co-found
+
+docker build --build-arg VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID} -t co-found-app:${VERSION} -f Dockerfile .
+
+docker tag co-found-app:${VERSION} ${IMAGE_NAME}
+
+echo ${GITHUB_TOKEN} | docker login ${REGISTRY} -u ${USERNAME} --password-stdin
+
+docker push ${IMAGE_NAME}
+
+docker tag co-found-app:${VERSION} co-found-app:latest
+docker tag co-found-app:latest ${REGISTRY}/${USERNAME}/co-found-app:latest
+docker push ${REGISTRY}/${USERNAME}/co-found-app:latest

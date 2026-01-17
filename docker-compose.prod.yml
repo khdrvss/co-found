@@ -1,23 +1,22 @@
 # Production Docker Compose for co-found
-# Compliant with strict security and resource management policies
-# Total memory limit: ~4.7 GiB (60% of 7.8 GiB system RAM)
+# Deployed at: /opt/docker/co-found
+# Total memory limit: 4.7 GiB (60% of 7.8 GiB system RAM, NO SWAP)
+# 
+# IMPORTANT: This file assumes:
+# - App image is pre-built and tagged (e.g., co-found-app:1.0.0)
+# - .env file exists with 600 permissions in project root
+# - All images are version-pinned (no :latest tags)
 
 services:
-  # Reverse proxy - only service allowed to bind to host ports 80/443
+  # Reverse proxy - ONLY service allowed to bind to host ports 80/443
   traefik:
     image: traefik:v2.10
     container_name: co-found-traefik
     restart: unless-stopped
     # Resource limits: lightweight reverse proxy
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
-    # Bounded logging to prevent disk fill
+    mem_limit: 256m
+    cpus: 0.5
+    # Bounded logging to prevent disk exhaustion
     logging:
       driver: json-file
       options:
@@ -35,22 +34,23 @@ services:
       - --certificatesResolvers.letsencrypt.acme.httpChallenge.entryPoint=web
       - --certificatesResolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}
       - --log.level=INFO
+      - --api.dashboard=false  # Disable dashboard in production (remove port 8080 if not needed)
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # Traefik dashboard (optional, consider removing in strict environments)
     volumes:
-      # Read-only Docker socket access (no privileged mode)
+      # NOTE: Traefik REQUIRES Docker socket for auto-discovery of services
+      # This is read-only (ro) and necessary for Traefik to function
+      # If Docker socket mounting is prohibited, use nginx with static config instead
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Named volume for ACME certificates
       - co-found-traefik-acme:/acme.json
     networks:
       - co-found-internal
     healthcheck:
-      # Traefik healthcheck: verify API endpoint is accessible
-      # Traefik v2.10 exposes /ping endpoint on port 8080
-      # Using netcat (nc) if available, otherwise fallback to TCP socket test
-      test: ["CMD-SHELL", "nc -z localhost 8080 || (timeout 1 bash -c '</dev/tcp/localhost/8080') || exit 1"]
+      # Check if Traefik is responding (port 8080 API, but dashboard disabled above)
+      # Fallback: check if main ports are listening
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/80' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -62,14 +62,8 @@ services:
     container_name: co-found-db
     restart: unless-stopped
     # Resource limits: database needs most memory for buffers and connections
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+    mem_limit: 2g
+    cpus: 1.0
     # Bounded logging
     logging:
       driver: json-file
@@ -89,6 +83,7 @@ services:
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     networks:
       - co-found-internal
+    # NO host ports exposed - only accessible via internal network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -102,25 +97,20 @@ services:
     container_name: co-found-redis
     restart: unless-stopped
     # Resource limits: cache service, moderate memory
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
+    mem_limit: 512m
+    cpus: 0.5
     # Bounded logging
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
-    # Named volume only
+    # Named volume only (no anonymous volumes)
     volumes:
       - co-found-redis-data:/data
     networks:
       - co-found-internal
+    # NO host ports exposed - only accessible via internal network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -129,23 +119,16 @@ services:
       start_period: 10s
 
   # Main application - Node.js Express server
+  # IMPORTANT: Image must be pre-built and version-pinned (e.g., co-found-app:1.0.0)
+  # Build command (run on CI/build server):
+  #   docker build -t co-found-app:1.0.0 -f Dockerfile .
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    image: co-found-app:1.0.0  # CHANGE THIS to your actual version tag
     container_name: co-found-app
     restart: unless-stopped
     # Resource limits: Node.js app, significant memory for V8 heap
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1.5G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+    mem_limit: 1.5g
+    cpus: 1.0
     # Bounded logging
     logging:
       driver: json-file
@@ -176,7 +159,9 @@ services:
       # Frontend URLs
       VITE_API_URL: ${VITE_API_URL:-https://co-found.uz}
       VITE_FRONTEND_URL: ${VITE_FRONTEND_URL:-https://co-found.uz}
-    # No host ports exposed - only accessible via Traefik reverse proxy
+      # Google OAuth (optional, from .env)
+      VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    # NO host ports exposed - only accessible via Traefik reverse proxy
     # Internal port 5000 only, accessible on co-found-internal network
     depends_on:
       db:
@@ -224,4 +209,5 @@ volumes:
 networks:
   co-found-internal:
     driver: bridge
-    internal: false  # Allow external access only through Traefik (ports 80/443)
+    # internal: false allows Traefik to access external services (Let's Encrypt)
+    # But app/db/redis are only accessible within this network
