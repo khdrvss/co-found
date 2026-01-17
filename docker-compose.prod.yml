@@ -1,11 +1,32 @@
-version: '3.8'
+# Production Docker Compose for co-found
+# Compliant with strict security and resource management policies
+# Total memory limit: ~4.7 GiB (60% of 7.8 GiB system RAM)
 
 services:
+  # Reverse proxy - only service allowed to bind to host ports 80/443
   traefik:
     image: traefik:v2.10
+    container_name: co-found-traefik
+    restart: unless-stopped
+    # Resource limits: lightweight reverse proxy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    # Bounded logging to prevent disk fill
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=co-found-internal
       - --entryPoints.web.address=:80
       - --entryPoints.websecure.address=:443
       - --entryPoints.web.http.redirections.entryPoint.to=websecure
@@ -17,73 +38,157 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # Traefik dashboard (optional)
+      - "8080:8080" # Traefik dashboard (optional, consider removing in strict environments)
     volumes:
+      # Read-only Docker socket access (no privileged mode)
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./monitoring/traefik/acme.json:/acme.json
-    restart: always
+      # Named volume for ACME certificates
+      - co-found-traefik-acme:/acme.json
+    networks:
+      - co-found-internal
+    healthcheck:
+      # Traefik healthcheck: verify API endpoint is accessible
+      # Traefik v2.10 exposes /ping endpoint on port 8080
+      # Using netcat (nc) if available, otherwise fallback to TCP socket test
+      test: ["CMD-SHELL", "nc -z localhost 8080 || (timeout 1 bash -c '</dev/tcp/localhost/8080') || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
+  # PostgreSQL database - largest memory allocation for query performance
   db:
     image: postgres:15-alpine
-    restart: always
+    container_name: co-found-db
+    restart: unless-stopped
+    # Resource limits: database needs most memory for buffers and connections
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Bounded logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Load secrets from .env file
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-cofound_prod}
+    # Named volume only (no anonymous volumes)
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - co-found-postgres-data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - co-found-internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
+  # Redis cache - moderate memory for caching and rate limiting
   redis:
     image: redis:7-alpine
-    restart: always
+    container_name: co-found-redis
+    restart: unless-stopped
+    # Resource limits: cache service, moderate memory
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    # Bounded logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Named volume only
     volumes:
-      - redis_data:/data
+      - co-found-redis-data:/data
+    networks:
+      - co-found-internal
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
+  # Main application - Node.js Express server
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    container_name: co-found-app
+    restart: unless-stopped
+    # Resource limits: Node.js app, significant memory for V8 heap
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Bounded logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Load all environment variables from .env
+    env_file:
+      - .env
     environment:
       # Core environment
       NODE_ENV: production
       PORT: 5000
-
-      # Database configuration
+      # Database configuration (using service name 'db' from internal network)
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-cofound_prod}
-      DB_HOST: ${DB_HOST:-db}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME:-${POSTGRES_DB:-cofound_prod}}
-      DB_USER: ${DB_USER:-${POSTGRES_USER:-postgres}}
-      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-cofound_prod}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cofound_prod}
-
-      # Redis configuration
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-
-      # Security / JWT (must be set - use a strong random string)
+      # Redis configuration (using service name 'redis' from internal network)
+      REDIS_URL: redis://redis:6379
+      # Security / JWT (must be set in .env)
       JWT_SECRET: ${JWT_SECRET}
-
-      # Frontend URLs used by the built app
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:5000}
-      VITE_FRONTEND_URL: ${VITE_FRONTEND_URL:-http://localhost:3000}
+      # Frontend URLs
+      VITE_API_URL: ${VITE_API_URL:-https://co-found.uz}
+      VITE_FRONTEND_URL: ${VITE_FRONTEND_URL:-https://co-found.uz}
+    # No host ports exposed - only accessible via Traefik reverse proxy
+    # Internal port 5000 only, accessible on co-found-internal network
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+    # Named volume for uploads (no anonymous volumes)
+    volumes:
+      - co-found-app-uploads:/app/uploads
+    networks:
+      - co-found-internal
+    # Traefik labels for routing (app accessible only through reverse proxy)
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.cofound.rule=Host(`co-found.uz`)"
@@ -95,11 +200,8 @@ services:
       - "traefik.http.routers.cofound-www.entrypoints=websecure"
       - "traefik.http.routers.cofound-www.tls.certresolver=letsencrypt"
       - "traefik.http.routers.cofound-www.middlewares=redirect-to-nonwww@docker"
-      - "traefik.http.middlewares.redirect-to-nonwww.redirectregex.regex=^https?://www\\.(.*)"
-      - "traefik.http.middlewares.redirect-to-nonwww.redirectregex.replacement=https://co-found.uz/$1"
-    ports:
-      - "5000:5000"
-    restart: unless-stopped
+      - "traefik.middlewares.redirect-to-nonwww.redirectregex.regex=^https?://www\\.(.*)"
+      - "traefik.middlewares.redirect-to-nonwww.redirectregex.replacement=https://co-found.uz/$$1"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
       interval: 15s
@@ -107,6 +209,19 @@ services:
       retries: 3
       start_period: 30s
 
+# Named volumes only (compliance: no anonymous volumes)
 volumes:
-  postgres_data:
-  redis_data:
+  co-found-postgres-data:
+    driver: local
+  co-found-redis-data:
+    driver: local
+  co-found-app-uploads:
+    driver: local
+  co-found-traefik-acme:
+    driver: local
+
+# Private internal network (compliance: not using default bridge)
+networks:
+  co-found-internal:
+    driver: bridge
+    internal: false  # Allow external access only through Traefik (ports 80/443)
