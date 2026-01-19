@@ -8,6 +8,10 @@
 # - All images are version-pinned (no :latest tags)
 
 services:
+
+  web:
+    ports:
+      - "3001:3001"
   # Reverse proxy - ONLY service allowed to bind to host ports 80/443
   traefik:
     image: traefik:v2.10
