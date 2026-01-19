@@ -1,3 +1,0 @@
-# Dashboard provisioning is disabled in this repo by default.
-# The dashboard JSON is available at ../cofound-dashboard.json for manual import.
-# If you want auto-provisioning later, replace this file with a valid provider YAML.

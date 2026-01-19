@@ -1,3 +1,0 @@
-# Provisioning disabled
-# To enable auto-provisioning in the future, create a datasource YAML here that points to Prometheus.
-# For now, we intentionally keep Grafana config manual to avoid surprises in production.
