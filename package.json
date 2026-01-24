@@ -21,7 +21,7 @@
     "migrate": "tsx scripts/apply-migrations.ts",
     "lint": "eslint .",
     "preview": "vite preview",
-    "loadtest": "k6 run tests/k6/conversation.js -e TARGET=http://localhost:5000"
+    "loadtest": "k6 run tests/k6/conversation.js -e TARGET=http://localhost:4000"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

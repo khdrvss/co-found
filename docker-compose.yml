@@ -147,13 +147,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-cofound_prod}
       DB_HOST: db
-      DB_PORT: 5432
+      DB_PORT: 5433
       DB_NAME: ${POSTGRES_DB:-cofound_prod}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-cofound_prod}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5433/${POSTGRES_DB:-cofound_prod}
       # Redis configuration (using service name 'redis' from internal network)
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://redis:6380
       # Security / JWT (must be set in .env)
       JWT_SECRET: ${JWT_SECRET}
       # Frontend URLs

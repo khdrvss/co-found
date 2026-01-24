@@ -525,6 +525,66 @@ router.delete('/projects/:id', authenticateToken, asyncHandler(async (req: any, 
   }
 }));
 
+// Join project (create join request)
+router.post('/projects/:id/join', authenticateToken, mutationLimiter, asyncHandler(async (req: any, res: Response) => {
+  try {
+    const projectId = req.params.id;
+    const userId = req.user.userId;
+    const { message } = req.body;
+
+    // Check if project exists
+    const projectRes = await query(
+      'SELECT user_id FROM projects WHERE id = $1',
+      [projectId]
+    );
+
+    if (projectRes.rows.length === 0) {
+      throw new NotFoundError('Project not found');
+    }
+
+    // Check if user is trying to join their own project
+    if (projectRes.rows[0].user_id === userId) {
+      throw new ValidationError('You cannot join your own project');
+    }
+
+    // Check if join request already exists
+    const existingRequest = await query(
+      'SELECT id, status FROM join_requests WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+
+    if (existingRequest.rows.length > 0) {
+      const status = existingRequest.rows[0].status;
+      if (status === 'pending') {
+        throw new ValidationError('You have already sent a join request for this project');
+      } else if (status === 'accepted') {
+        throw new ValidationError('You are already a member of this project');
+      }
+      // If rejected, allow them to request again by updating the existing record
+      await query(
+        'UPDATE join_requests SET status = $1, message = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+        ['pending', message || null, existingRequest.rows[0].id]
+      );
+      res.status(201).json({ message: 'Join request re-submitted successfully' });
+      return;
+    }
+
+    // Create new join request
+    const result = await query(
+      'INSERT INTO join_requests (project_id, user_id, status, message) VALUES ($1, $2, $3, $4) RETURNING *',
+      [projectId, userId, 'pending', message || null]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    if (error instanceof NotFoundError || error instanceof ValidationError) {
+      throw error;
+    }
+    logError(error instanceof Error ? error : new Error(String(error)), `Join project ${req.params.id}`);
+    throw new DatabaseError('Failed to create join request');
+  }
+}));
+
 // Get private messages with pagination
 router.get('/messages/private/:partnerId', authenticateToken, asyncHandler(async (req: any, res: Response) => {
   try {

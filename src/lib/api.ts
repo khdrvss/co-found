@@ -1,5 +1,10 @@
-// Use environment variable for API URL, fallback to proxy path
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// API URL configuration supporting both development and production
+const getApiUrl = () => {
+  // Always use the configured API URL (defaults to co-found.uz)
+  return import.meta.env.VITE_API_URL || 'https://api.co-found.uz/api';
+};
+
+const API_URL = getApiUrl();
 
 // Custom error class for API errors
 export class ApiError extends Error {

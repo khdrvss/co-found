@@ -52,12 +52,12 @@ function getConfig(): Config {
   const nodeEnv = process.env.NODE_ENV || 'development';
 
   return {
-    port: parseInt(process.env.PORT || '5000', 10),
+    port: parseInt(process.env.PORT || '4000', 10),
     nodeEnv: nodeEnv as 'development' | 'production' | 'test',
 
     database: {
       host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
+      port: parseInt(process.env.DB_PORT || '5433', 10),
       name: process.env.DB_NAME || 'cofound_local',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
@@ -70,12 +70,12 @@ function getConfig(): Config {
 
     apis: {
       googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || '',
-      apiUrl: process.env.VITE_API_URL || 'http://localhost:5000/api',
-      frontendUrl: process.env.VITE_FRONTEND_URL || 'http://localhost:3000',
+      apiUrl: process.env.VITE_API_URL || 'https://api.co-found.uz/api',
+      frontendUrl: process.env.VITE_FRONTEND_URL || 'https://co-found.uz',
     },
 
     security: {
-      allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(','),
+      allowedOrigins: (process.env.ALLOWED_ORIGINS || 'https://co-found.uz,https://www.co-found.uz').split(','),
       enableRateLimit: process.env.ENABLE_RATE_LIMIT !== 'false',
       enableCsrf: process.env.ENABLE_CSRF !== 'false',
     },
