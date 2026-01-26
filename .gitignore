@@ -7,10 +7,19 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
 dist
 dist-ssr
+dist-server
 *.local
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.docker
+.env.*.local
 
 # Editor directories and files
 .vscode/*
@@ -23,4 +32,33 @@ dist-ssr
 *.sln
 *.sw?
 
+# Prisma
 /generated/prisma
+prisma/.env
+
+# Uploads
+uploads/
+*.uploaded
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Build artifacts
+build/
+*.tgz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# PM2
+.pm2/
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

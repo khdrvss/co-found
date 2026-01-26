@@ -31,12 +31,10 @@ COPY --from=builder /app/dist ./dist
 
 # Copy backend and config files
 COPY src ./src
-COPY migrations ./migrations
 COPY schema.sql ./
 COPY tsconfig*.json ./
 COPY tsconfig.server.json ./
 COPY prisma ./prisma
-COPY docs ./docs
 
 # Create uploads directory
 RUN mkdir -p uploads
